@@ -6,7 +6,7 @@ import shutil
 import sys
 import threading
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 from continuity.fixture import FixtureAdapter
 from continuity.server import make_server
 
@@ -28,27 +28,27 @@ try:
         page.goto(origin+'/#token='+server.engine.token)
         page.wait_for_selector('#pair[hidden]', state='attached')
         page.select_option('#window','101')
-        page.wait_for_function("document.querySelector('#target').textContent.includes('101')")
+        expect(page.locator('#target')).to_contain_text('101')
         page.click('#claim')
-        page.wait_for_function("document.querySelector('#linkState').textContent.includes('有控制权')")
+        expect(page.locator('#linkState')).to_contain_text('有控制权')
         page.click('#semantics')
         page.wait_for_selector('#nodes textarea')
         page.fill('#nodes textarea','Draft written from mobile view')
         page.get_by_text('写入原控件（替换全文，不提交）').click()
-        page.wait_for_function("document.querySelector('#nodes textarea')?.value === 'Draft written from mobile view'")
-        page.wait_for_function("!document.querySelector('#frame').disabled")
+        expect(page.locator('#nodes textarea')).to_have_value('Draft written from mobile view')
+        expect(page.locator('#frame')).to_be_enabled()
         assert server.engine.adapter.value == 'Draft written from mobile view'
         page.click('#frame')
-        page.wait_for_function("document.querySelector('#frameInfo').textContent.includes('完整基线')")
+        expect(page.locator('#frameInfo')).to_contain_text('完整基线')
         first = server.engine.budget.used
         page.click('#frame')
-        page.wait_for_function("document.querySelector('#frameInfo').textContent.includes('0 块')")
+        expect(page.locator('#frameInfo')).to_contain_text('0 块')
         static_delta = server.engine.budget.used-first
         assert 0 < static_delta < 512, static_delta
         page.reload()
         page.wait_for_selector('#pair[hidden]', state='attached')
         page.click('#semantics')
-        page.wait_for_function("document.querySelector('#nodes textarea')?.value === 'Draft written from mobile view'")
+        expect(page.locator('#nodes textarea')).to_have_value('Draft written from mobile view')
         with page.expect_download() as event:
             page.click('#export')
         report = json.loads(Path(event.value.path()).read_text())
