@@ -1,0 +1,6 @@
+Pillow==12.3.0
+qrcode==8.2
+pyobjc-core==12.2.2; sys_platform == 'darwin'
+pyobjc-framework-Cocoa==12.2.2; sys_platform == 'darwin'
+pyobjc-framework-Quartz==12.2.2; sys_platform == 'darwin'
+pyobjc-framework-ApplicationServices==12.2.2; sys_platform == 'darwin'

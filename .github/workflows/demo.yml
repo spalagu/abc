@@ -1,0 +1,85 @@
+name: Demo test, build and release
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: demo-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt playwright==1.55.0
+      - run: python -m unittest discover -s tests -v
+      - run: node --check web/app.js
+      - run: python -m playwright install --with-deps chromium
+      - run: python tests/browser_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-test-evidence
+          path: test-results/
+          if-no-files-found: ignore
+  mac:
+    needs: tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements-build.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python -m continuity --smoke-test
+      - run: bash scripts/build-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WorkContinuity-${{ matrix.arch }}
+          path: release/
+          if-no-files-found: error
+  release:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [tests, mac]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: WorkContinuity-*
+          path: packages
+      - name: Publish immutable demo build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="demo-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:7}"
+          gh release create "$TAG" --target "$GITHUB_SHA" --prerelease \
+            --title "Work Continuity ${TAG}" --notes-file docs/RELEASE-NOTES.md \
+            packages/WorkContinuity-arm64/WorkContinuity-macOS-arm64.zip \
+            packages/WorkContinuity-arm64/SHA256SUMS-arm64.txt \
+            packages/WorkContinuity-x86_64/WorkContinuity-macOS-x86_64.zip \
+            packages/WorkContinuity-x86_64/SHA256SUMS-x86_64.txt \
+            docs/ACCEPTANCE.zh-CN.md

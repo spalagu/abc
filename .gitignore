@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.spec
+build/
+dist/
+release/
+.DS_Store
+*.pem
+*.key
+*diagnostic*.json
+test-results/
