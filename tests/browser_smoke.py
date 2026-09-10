@@ -42,7 +42,7 @@ try:
         expect(page.locator('#frameInfo')).to_contain_text('完整基线')
         first = server.engine.budget.used
         page.click('#frame')
-        expect(page.locator('#frameInfo')).to_contain_text('0 块')
+        expect(page.locator('#frameInfo')).to_contain_text('局部增量 · 0 块')
         static_delta = server.engine.budget.used-first
         assert 0 < static_delta < 512, static_delta
         page.reload()
