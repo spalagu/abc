@@ -10,6 +10,7 @@ class FixtureAdapter:
     def __init__(self):
         self.value = 'A draft that remains on the host.'
         self.clicks = 0
+        self.last_input = None
         self.window = Window(101, 123, 'fixture-birth', 'TEST FIXTURE', 'Synthetic work', (0, 0, 960, 640))
 
     def permissions(self):
@@ -61,10 +62,16 @@ class FixtureAdapter:
             raise Problem('unsupported', '不支持的操作')
 
     def visual_action(self, window, action, data, frame):
+        from .window_input import click_button, screen_point
         self.ensure(window)
+        if action == 'click':
+            click_button(data)
+            screen_point(window, frame, data)
+        self.last_input = dict(data)
         if action == 'text':
             self.value += data['text']
         elif action in ('click', 'key', 'scroll'):
             self.clicks += 1
         else:
             raise Problem('unsupported', '不支持的操作')
+        return {'delivery': 'fixture_applied', 'route': 'fixture', 'message': '合成测试适配器已执行；不代表实际 Mac 输入兼容性。'}

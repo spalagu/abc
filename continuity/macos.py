@@ -205,48 +205,5 @@ class MacAdapter:
         return current
 
     def visual_action(self, window, action, data, frame):
-        current = self._frontmost(window)
-        if current.bounds != frame.bounds:
-            raise Problem('moved', '窗口位置或大小已变化，请重新取画面', 409)
-        if not A.AXIsProcessTrusted():
-            raise Problem('accessibility', '缺少辅助功能权限', 403)
-        if action == 'click':
-            x = bounded_number(data.get('x'), 0, 1, 'x')
-            y = bounded_number(data.get('y'), 0, 1, 'y')
-            rx, ry, rw, rh = frame.roi
-            bx, by, bw, bh = current.bounds
-            point = (bx + min(bw-1, (rx+x*rw)*bw), by + min(bh-1, (ry+y*rh)*bh))
-            for kind in (Q.kCGEventLeftMouseDown, Q.kCGEventLeftMouseUp):
-                event = Q.CGEventCreateMouseEvent(None, kind, point, Q.kCGMouseButtonLeft)
-                Q.CGEventPost(Q.kCGHIDEventTap, event)
-        elif action == 'text':
-            # Direct Unicode events: no clipboard writes and no AppleScript code interpolation.
-            text = data['text']
-            for start in range(0, len(text), 40):
-                part = text[start:start+40]
-                length = len(part.encode('utf-16-le')) // 2
-                for down in (True, False):
-                    event = Q.CGEventCreateKeyboardEvent(None, 0, down)
-                    Q.CGEventKeyboardSetUnicodeString(event, length, part)
-                    Q.CGEventPost(Q.kCGHIDEventTap, event)
-        elif action == 'key':
-            table = {'enter': (36, 0), 'tab': (48, 0), 'escape': (53, 0), 'backspace': (51, 0),
-                     'up': (126, 0), 'down': (125, 0), 'left': (123, 0), 'right': (124, 0),
-                     'select_all': (0, Q.kCGEventFlagMaskCommand), 'copy': (8, Q.kCGEventFlagMaskCommand),
-                     'interrupt': (8, Q.kCGEventFlagMaskControl)}
-            if data.get('key') not in table:
-                raise Problem('key', '不支持此快捷键')
-            key, flags = table[data['key']]
-            for down in (True, False):
-                event = Q.CGEventCreateKeyboardEvent(None, key, down)
-                Q.CGEventSetFlags(event, flags)
-                Q.CGEventPost(Q.kCGHIDEventTap, event)
-        elif action == 'scroll':
-            delta = int(bounded_number(data.get('delta'), -8, 8, 'delta'))
-            bx, by, bw, bh = current.bounds
-            rx, ry, rw, rh = frame.roi
-            event = Q.CGEventCreateScrollWheelEvent(None, Q.kCGScrollEventUnitLine, 1, delta)
-            Q.CGEventSetLocation(event, (bx+(rx+rw/2)*bw, by+(ry+rh/2)*bh))
-            Q.CGEventPost(Q.kCGHIDEventTap, event)
-        else:
-            raise Problem('unsupported', '未知输入动作')
+        from .window_input import WindowInput
+        return WindowInput(self).perform(window, action, data, frame)

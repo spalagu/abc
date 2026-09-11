@@ -10,7 +10,7 @@ python3 - <<'PY'
 import plistlib
 p='dist/WorkContinuity.app/Contents/Info.plist'
 with open(p,'rb') as f: d=plistlib.load(f)
-d.update(CFBundleShortVersionString='0.1.0',CFBundleVersion='1',LSMinimumSystemVersion='13.0',
+d.update(CFBundleShortVersionString='0.1.1',CFBundleVersion='2',LSMinimumSystemVersion='13.0',
          NSHighResolutionCapable=True,
          NSLocalNetworkUsageDescription='Connect your own phone to this Mac on a trusted local network.')
 with open(p,'wb') as f: plistlib.dump(d,f)

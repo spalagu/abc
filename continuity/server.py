@@ -135,6 +135,7 @@ class Engine:
                 raise Problem('invalid', '文本超出 8000 字符或包含 NUL')
             s.responses[rid] = (digest, Problem('uncertain', '该操作已尝试，结果不确定；请先核对原窗口', 409))
             try:
+                outcome = {}
                 if action == 'activate':
                     self.adapter.activate(s.window)
                     s.frames = FrameState()
@@ -150,10 +151,10 @@ class Engine:
                 else:
                     if not s.frames.revision or data.get('revision') != s.frames.revision or time.monotonic()-s.frames.captured_at > 30:
                         raise Problem('stale', '画面已过期，请先刷新画面（有效期 30 秒）', 409)
-                    self.adapter.visual_action(s.window, action, data, s.frames)
+                    outcome = self.adapter.visual_action(s.window, action, data, s.frames) or {}
                     s.frames.captured_at = 0
                     s.semantic_revision, s.nodes = '', {}
-                result = {'ok': True, 'request_id': rid, 'replay': False}
+                result = {'ok': True, 'request_id': rid, 'replay': False, **outcome}
                 s.responses[rid] = (digest, result)
                 return result
             except Problem as error:

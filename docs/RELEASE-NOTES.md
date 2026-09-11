@@ -1,11 +1,9 @@
-# Work Continuity — experimental macOS demo
+# Work Continuity 0.1.1 — input fix
 
-Choose **arm64** for Apple Silicon or **x86_64** for Intel. Unzip and move WorkContinuity.app to Applications. Python is bundled. macOS 13+ is the source target; CI builds are exercised on macOS 14 (Apple Silicon) and 15 (Intel), not every supported OS version.
+修复画面右键和不可见的输入错误；默认后台控件，不主动置前；可明确选择后台定向键鼠实验模式。实验模式的“已提交”不等于应用已执行。系统菜单可能是独立窗口，当前单窗口截图未必包含。详情见 docs/INPUT-FIX.md 和附件验收说明。
 
-Read the attached ACCEPTANCE.zh-CN.md first: installation, permissions, same-Wi-Fi validation, optional private HTTPS/Tailscale setup, pass criteria and troubleshooting.
+Choose arm64 for Apple Silicon or x86_64 for Intel. Quit the previous Host, unzip and replace WorkContinuity.app in Applications, then reconnect using a fresh pairing URL. Python is bundled. macOS 13+ is the source target; CI builds run on macOS 14/15, not every OS version.
 
-Features: native existing-window selection; bounded AX text/controls; on-demand JPEG tile deltas and ROI; limited real input; expiring scenes and control lease; host-wide frame budget; content-free diagnostics. No Tabverse dependency.
+Ad-hoc signed, NOT Apple-notarized. LAN HTTP is opt-in and unencrypted; never publish the port on the Internet. Private HTTPS/VPN is required for untrusted networks. No automatic activation, approvals, unlocking or permission bypass in background routes.
 
-**Important:** ad-hoc signed, not Apple-notarized. HTTP LAN mode is explicitly opt-in and unencrypted; never expose the port publicly. The app does not unlock the Mac, bypass permissions, keep it awake or operate a second copy of your work. No automatic approvals.
-
-A published release means automated tests and packaging passed. It does **not** mean actual Mac/Codex/iPhone/VPN interactive acceptance passed. AX may be incomplete; original image mode is available for checking. All usage is experimental.
+Release publication requires protocol tests, Chromium/WebKit fixture interaction, native Mac event construction and UI launch, packaging and signature checks on both architectures. These do NOT prove real Lens/Codex/iPhone compatibility. CGEventPostToPid provides no application acknowledgement. Right-menu capture and arbitrary background input remain limited and must be assessed in a real host test.
