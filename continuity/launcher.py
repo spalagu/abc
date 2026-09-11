@@ -14,6 +14,8 @@ import threading
 from urllib.parse import urlsplit
 import webbrowser
 from .server import make_server
+from . import __version__
+from .permissions import PERMISSIONS, permission, runtime_identity
 
 
 def webroot():
@@ -70,9 +72,9 @@ def native_gui():
             self.join = ''
             self.adapter = MacAdapter()
             self.window = K.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-                ((0, 0), (720, 610)), K.NSWindowStyleMaskTitled | K.NSWindowStyleMaskClosable | K.NSWindowStyleMaskMiniaturizable,
+                ((0, 0), (760, 790)), K.NSWindowStyleMaskTitled | K.NSWindowStyleMaskClosable | K.NSWindowStyleMaskMiniaturizable,
                 K.NSBackingStoreBuffered, False)
-            self.window.setTitle_('Work Continuity · 独立可行性 Demo')
+            self.window.setTitle_('Work Continuity · ' + __version__)
             self.window.center()
             content = self.window.contentView()
             def label(text, rect, size=13):
@@ -87,10 +89,25 @@ def native_gui():
                 b.setTitle_(text); b.setTarget_(self); b.setAction_(action); b.setBezelStyle_(K.NSBezelStyleRounded)
                 content.addSubview_(b)
                 return b
-            label('接着做。', ((24, 551), (500, 42)), 30)
-            label('同一个 Mac 窗口 · 文字控件 / 按需局部画面 · 默认只监听本机', ((26, 514), (665, 32)))
-            button('1. 请求辅助功能与屏幕录制权限', 'permissions:', ((24, 465), (315, 34)))
-            button('打开系统隐私设置', 'settings:', ((350, 465), (220, 34)))
+            label('接着做。', ((24, 731), (500, 42)), 30)
+            label('同一个 Mac 窗口 · 文字控件 / 按需局部画面 · 默认只监听本机', ((26, 697), (708, 28)))
+            self.permission_status = {}
+            for item, y in zip(PERMISSIONS, (648, 600)):
+                self.permission_status[item.key] = label(item.title, ((26, y), (205, 34)), 12)
+                button('请求权限', item.request_selector, ((236, y), (128, 34)))
+                button('打开' + item.title + '设置', item.settings_selector, ((372, y), (270, 34)))
+            button('重新检查授权', 'refreshPermissions:', ((24, 553), (165, 34)))
+            button('在 Finder 显示当前程序', 'revealProgram:', ((197, 553), (232, 34)))
+            bundle = F.NSBundle.mainBundle()
+            self.runtime = runtime_identity(sys.executable, bool(getattr(sys, 'frozen', False)),
+                                            str(bundle.bundlePath() or ''), str(bundle.bundleIdentifier() or ''))
+            location = self.runtime['app_path'] or self.runtime['executable']
+            mode = '打包应用' if self.runtime['app_path'] else '源码/可执行程序；授权对象以系统弹窗为准'
+            label('当前运行：' + mode + '\n' + location,
+                  ((26, 492), (708, 55)), 12)
+            self.permission_help = label('请求权限与打开设置相互独立。系统列表没有本应用时，点“＋”添加上方当前程序。\n录屏请加到“录屏与系统录音”，不是“仅系统录音”。授权后完整退出并重开。',
+                                         ((26, 452), (708, 36)), 12)
+            self.refreshPermissions_(None)
             self.lan = K.NSButton.alloc().initWithFrame_(((24, 415), (668, 32)))
             self.lan.setButtonType_(K.NSButtonTypeSwitch)
             self.lan.setTitle_('允许可信局域网连接（HTTP 明文，仅在自家 Wi-Fi 验证）')
@@ -123,12 +140,51 @@ def native_gui():
             alert.addButtonWithTitle_('确定')
             alert.runModal()
 
-        def permissions_(self, sender):
-            self.adapter.request_permissions()
-            self.alert_('请在系统设置开启“辅助功能”和“屏幕与系统音频录制”中实际出现的 WorkContinuity。源码模式可能显示 Terminal/Python。授权后退出并重新打开。')
+        def refreshPermissions_(self, sender):
+            try:
+                state = self.adapter.permissions()
+                for item in PERMISSIONS:
+                    value = '已授权' if state[item.key] else '尚未生效'
+                    self.permission_status[item.key].setStringValue_(item.title + '\n当前进程：' + value)
+            except Exception as error:
+                self.permission_help.setStringValue_('权限检查失败（' + type(error).__name__ + '），请核对当前程序位置。')
 
-        def settings_(self, sender):
-            K.NSWorkspace.sharedWorkspace().openURL_(F.NSURL.URLWithString_('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'))
+        def applicationDidBecomeActive_(self, notification):
+            if hasattr(self, 'permission_status'):
+                self.refreshPermissions_(None)
+
+        def requestAccessibility_(self, sender):
+            self.requestPermission_('accessibility')
+
+        def requestScreenRecording_(self, sender):
+            self.requestPermission_('screen_recording')
+
+        def requestPermission_(self, key):
+            item = permission(key)
+            try:
+                self.adapter.request_permission(key)
+                self.permission_help.setStringValue_('已调用“' + item.title + '”系统权限请求，不代表已经获准。\n没有弹窗或列表条目时，点该行“打开设置”，再用“＋”添加当前应用。授权后退出重开。')
+            except Exception as error:
+                self.permission_help.setStringValue_('“' + item.title + '”请求失败（' + type(error).__name__ + '）。请打开对应设置，手动添加当前应用。')
+            # No second prompt, no automatic pane navigation, no modal alert
+            # covering the system's consent dialog.
+            self.refreshPermissions_(None)
+
+        def openAccessibility_(self, sender):
+            self.openPermissionSettings_('accessibility')
+
+        def openScreenRecording_(self, sender):
+            self.openPermissionSettings_('screen_recording')
+
+        def openPermissionSettings_(self, key):
+            item = permission(key)
+            opened = K.NSWorkspace.sharedWorkspace().openURL_(F.NSURL.URLWithString_(item.settings_url))
+            self.permission_help.setStringValue_(('已请求打开设置。' if opened else '系统未接受快捷跳转。') +
+                '若落在其他页面，请手动前往“系统设置 → 隐私与安全性 → ' + item.title + '”。\n打开页面不会授予权限；没有应用条目请点“＋”添加当前程序。')
+
+        def revealProgram_(self, sender):
+            path = self.runtime['reveal_path']
+            K.NSWorkspace.sharedWorkspace().activateFileViewerSelectingURLs_([F.NSURL.fileURLWithPath_(path)])
 
         def start_(self, sender):
             if self.server:
@@ -224,7 +280,15 @@ def main():
                 assert hasattr(A, name), name
             for name in ['CGPreflightScreenCaptureAccess', 'CGEventKeyboardSetUnicodeString']:
                 assert hasattr(Q, name), name
-            print(json.dumps({'mac_imports': True, 'permissions': MacAdapter().permissions()}))
+            import Foundation as F
+            bundle = F.NSBundle.mainBundle()
+            identity = runtime_identity(sys.executable, bool(getattr(sys, 'frozen', False)),
+                                        str(bundle.bundlePath() or ''), str(bundle.bundleIdentifier() or ''))
+            if getattr(sys, 'frozen', False):
+                assert identity['app_path'], 'Packaged executable must locate its current .app'
+                assert identity['bundle_id'] == 'io.github.spalagu.workcontinuity'
+            print(json.dumps({'mac_imports': True, 'permissions': MacAdapter().permissions(),
+                              'packaged_app_identity': bool(identity['app_path'])}))
         print('smoke-test: assets and imports OK; NOT an interactive permission/remote test')
         return
     if args.gui or (getattr(sys, 'frozen', False) and len(sys.argv) == 1):

@@ -14,6 +14,7 @@ import AppKit as K
 import ApplicationServices as A
 import Quartz as Q
 from .core import Problem, Window, bounded_number
+from .permissions import permission_hint, request_permission
 
 
 class MacAdapter:
@@ -24,9 +25,8 @@ class MacAdapter:
                 'screen_recording': bool(Q.CGPreflightScreenCaptureAccess()),
                 'fixture': False}
 
-    def request_permissions(self):
-        A.AXIsProcessTrustedWithOptions({A.kAXTrustedCheckOptionPrompt: True})
-        Q.CGRequestScreenCaptureAccess()
+    def request_permission(self, key):
+        return request_permission(key, A, Q)
 
     def _unlocked(self):
         state = Q.CGSessionCopyCurrentDictionary()
@@ -74,7 +74,7 @@ class MacAdapter:
 
     def _ax_window(self, window):
         if not A.AXIsProcessTrusted():
-            raise Problem('accessibility', '缺少辅助功能权限。请在 Mac 系统设置授权启动本程序的 Terminal/Python，然后重启 demo。', 403)
+            raise Problem('accessibility', permission_hint('accessibility'), 403)
         current = self.ensure(window)
         root = A.AXUIElementCreateApplication(window.pid)
         A.AXUIElementSetMessagingTimeout(root, 0.15)
@@ -99,7 +99,7 @@ class MacAdapter:
     def capture(self, window):
         self.ensure(window)
         if not Q.CGPreflightScreenCaptureAccess():
-            raise Problem('screen_recording', '缺少屏幕录制权限。请在 Mac 系统设置授权实际出现的 Terminal/Python 进程，然后重启 demo。', 403)
+            raise Problem('screen_recording', permission_hint('screen_recording'), 403)
         with tempfile.TemporaryDirectory(prefix='work-continuity-') as directory:
             path = Path(directory) / 'window.png'
             try:
