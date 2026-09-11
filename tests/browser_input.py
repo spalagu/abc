@@ -23,16 +23,24 @@ def ready(page):
     expect(page.locator('#frame')).to_be_enabled()
 
 
-def attach(page):
+def attach(page, control=True):
     page.goto(origin+'/#token='+server.engine.token)
     expect(page.locator('#pair')).to_be_hidden()
     page.select_option('#window','101')
     expect(page.locator('#target')).to_contain_text('101')
-    page.click('#claim')
-    expect(page.locator('#linkState')).to_contain_text('有控制权')
+    if control:
+        page.click('#claim')
+        expect(page.locator('#linkState')).to_contain_text('有控制权')
     page.click('#frame')
     expect(page.locator('#canvas')).to_be_visible()
     ready(page)
+
+
+def observe_menu(page):
+    # Attach on the canvas itself: the handler intentionally stops propagation.
+    page.evaluate("""() => document.querySelector('#canvas').addEventListener('contextmenu', event => {
+      document.body.dataset.menuPrevented=String(event.defaultPrevented);
+    })""")
 
 
 try:
@@ -46,17 +54,23 @@ try:
         page = context.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        attach(page)
-        # DOM listener sees whether the native contextmenu default was prevented.
-        page.evaluate("""() => document.querySelector('#canvas').addEventListener('contextmenu', event => {
-          document.body.dataset.menuPrevented=String(event.defaultPrevented);
-        })""")
+        attach(page, control=False)
+        observe_menu(page)
         canvas=page.locator('#canvas')
         count=adapter.clicks
         canvas.click(button='right',position={'x':80,'y':80})
         expect(page.locator('body')).to_have_attribute('data-menu-prevented','false')
         assert adapter.clicks == count, 'Read-only must not deliver right click'
-        page.keyboard.press('Escape')
+        # The WebKit GTK native menu is outside the DOM; page Escape does not
+        # reliably dismiss it. Close this read-only context instead of changing
+        # app policy or letting the native menu swallow the next test's click.
+        context.close()
+        context = browser.new_context(viewport={'width':1000,'height':800})
+        page = context.new_page()
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        attach(page)
+        observe_menu(page)
+        canvas=page.locator('#canvas')
         page.check('#clickMode')
         with page.expect_response(lambda r:r.url.endswith('/api/action')) as response:
             canvas.click(position={'x':120,'y':120})
@@ -74,7 +88,6 @@ try:
         assert adapter.last_input['button']=='right'
         assert adapter.clicks==count+2, 'One right click must not become left+right'
         expect(page.locator('#inputStatus')).to_contain_text('合成测试')
-        # A server refusal is adjacent and floating, not hidden at page top.
         original=adapter.visual_action
         def reject(*args):
             raise Problem('background_unsupported','测试：后台不支持，未执行',409)
@@ -90,7 +103,6 @@ try:
         page.click('#release')
         ready(page)
         context.close()
-        # Explicit right-click selector on touch devices, no long-press ambiguity.
         context=browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
         page=context.new_page()
         page.on('pageerror',lambda e:errors.append(str(e)))
